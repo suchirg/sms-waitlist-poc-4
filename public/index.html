@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS Waitlist - Dashboard</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        #root {
+            min-height: 100vh;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+            background-color: #fff;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .header p {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 4px;
+        }
+        
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .queue-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #e0e0e0;
+            background-color: #fafafa;
+        }
+        
+        .queue-header {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            background-color: white;
+        }
+        
+        .queue-header h2 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .queue-header p {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .queue-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        
+        .queue-item {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            transition: all 0.2s ease;
+        }
+        
+        .queue-item.notified {
+            border-left-color: #f59e0b;
+            background-color: #fffbf0;
+        }
+        
+        .queue-item.seated {
+            border-left-color: #10b981;
+            background-color: #f0fdf4;
+        }
+        
+        .queue-item.no-show {
+            border-left-color: #ef4444;
+            background-color: #fef2f2;
+            opacity: 0.6;
+        }
+        
+        .queue-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .queue-item-position {
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+            min-width: 30px;
+        }
+        
+        .queue-item-title {
+            flex: 1;
+            margin-left: 12px;
+        }
+        
+        .queue-item-title strong {
+            display: block;
+            font-size: 14px;
+        }
+        
+        .queue-item-title small {
+            color: #999;
+            font-size: 12px;
+        }
+        
+        .queue-item-status {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background-color: #e0e7ff;
+            color: #667eea;
+        }
+        
+        .queue-item.notified .queue-item-status {
+            background-color: #fef3c7;
+            color: #d97706;
+        }
+        
+        .queue-item.seated .queue-item-status {
+            background-color: #d1fae5;
+            color: #059669;
+        }
+        
+        .queue-item.no-show .queue-item-status {
+            background-color: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .queue-item-details {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .queue-item-details span {
+            display: flex;
+            align-items: center;
+        }
+        
+        .queue-item-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        
+        .btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex: 1;
+        }
+        
+        .btn-primary {
+            background-color: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #5568d3;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            background-color: #cbd5e1;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background-color: #f3f4f6;
+            color: #333;
+            border: 1px solid #d1d5db;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #e5e7eb;
+        }
+        
+        .btn-danger {
+            background-color: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        
+        .btn-danger:hover {
+            background-color: #fecaca;
+        }
+        
+        .analytics-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            overflow-y: auto;
+        }
+        
+        .analytics-header {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .analytics-header h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+        
+        .toggle-group {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .toggle-btn {
+            padding: 6px 12px;
+            border: 1px solid #d1d5db;
+            background-color: #f9fafb;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .toggle-btn.active {
+            background-color: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .analytics-content {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .analytics-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .analytics-card.served {
+            background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+        }
+        
+        .analytics-card.no-show {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+        
+        .analytics-card.wait-time {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        }
+        
+        .analytics-card.peak {
+            background: linear-gradient(135deg, #ff9a56 0%, #ff6a88 100%);
+        }
+        
+        .analytics-card-label {
+            font-size: 12px;
+            font-weight: 600;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .analytics-card-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        
+        .analytics-card-subtext {
+            font-size: 12px;
+            opacity: 0.95;
+            margin-top: 8px;
+            color: white;
+        }
+        
+        .analytics-card-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        
+        .indicator-green {
+            background-color: #10b981;
+        }
+        
+        .indicator-yellow {
+            background-color: #f59e0b;
+        }
+        
+        .indicator-red {
+            background-color: #ef4444;
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #999;
+            text-align: center;
+        }
+        
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #999;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            background-color: #fee2e2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 12px;
+            color: #dc2626;
+            font-size: 14px;
+            margin: 16px;
+        }
+        
+        .success-message {
+            background-color: #d1fae5;
+            border: 1px solid #a7f3d0;
+            border-radius: 8px;
+            padding: 12px;
+            color: #059669;
+            font-size: 14px;
+            margin: 16px;
+        }
+        
+        @media (max-width: 1024px) {
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .queue-panel {
+                border-right: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .analytics-panel {
+                flex: 0 0 auto;
+                max-height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel" src="/dashboard.jsx"></script>
+</body>
+</html>
